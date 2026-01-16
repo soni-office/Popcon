@@ -2,6 +2,7 @@ import time
 import re
 import json
 from typing import List, Set
+from datetime import datetime, timedelta
 from tavily import TavilyClient
 from openai import OpenAI
 from config import Config
@@ -14,7 +15,7 @@ logger = setup_logger(__name__)
 class TavilyAgent:
     """Agent for performing web searches using Tavily AI"""
     
-    def __init__(self):
+    def __init__(self, days_filter: int = 45):
         # Validate API keys before initializing clients
         if not Config.TAVILY_API_KEY or Config.TAVILY_API_KEY == "your_tavily_api_key_here":
             raise ValueError("TAVILY_API_KEY is not set or is still a placeholder. Please set it in your .env file.")
@@ -25,6 +26,9 @@ class TavilyAgent:
         self.openai_client = OpenAI(api_key=Config.OPENAI_API_KEY)
         self.last_request_time = 0
         self.min_request_interval = 1.0 / Config.TAVILY_RATE_LIMIT
+        self.days_filter = days_filter  # Filter results to last N days
+        self.cutoff_date = datetime.now() - timedelta(days=days_filter)
+        logger.info(f"TavilyAgent initialized with {days_filter}-day filter (cutoff: {self.cutoff_date.strftime('%Y-%m-%d')})")
     
     def _rate_limit(self):
         """Implement rate limiting"""
@@ -34,6 +38,40 @@ class TavilyAgent:
             sleep_time = self.min_request_interval - time_since_last
             time.sleep(sleep_time)
         self.last_request_time = time.time()
+    
+    def _filter_results_by_date(self, results: List[dict]) -> List[dict]:
+        """
+        Filter search results to only include those within the date range
+        Returns filtered list of results
+        """
+        filtered_results = []
+        
+        for result in results:
+            # Check if result has published_date
+            published_date = result.get('published_date')
+            
+            if published_date:
+                try:
+                    # Parse the date (Tavily returns ISO format: YYYY-MM-DD)
+                    result_date = datetime.fromisoformat(published_date.replace('Z', '+00:00'))
+                    
+                    # Check if within date range
+                    if result_date >= self.cutoff_date:
+                        filtered_results.append(result)
+                        logger.debug(f"✓ Included result from {published_date}")
+                    else:
+                        logger.debug(f"✗ Filtered out result from {published_date} (older than {self.days_filter} days)")
+                except (ValueError, AttributeError) as e:
+                    # If date parsing fails, include the result (better to include than exclude)
+                    logger.debug(f"Could not parse date '{published_date}', including result anyway")
+                    filtered_results.append(result)
+            else:
+                # If no date available, include the result
+                logger.debug("No published_date found, including result")
+                filtered_results.append(result)
+        
+        logger.info(f"Date filter: {len(results)} results → {len(filtered_results)} results (within {self.days_filter} days)")
+        return filtered_results
     
     def search_companies(self, goal: str, max_results: int = 50) -> Set[Company]:
         """
@@ -49,13 +87,18 @@ class TavilyAgent:
             response = self.client.search(
                 query=query,
                 max_results=max_results,
-                search_depth="advanced"
+                search_depth="advanced",
+                days=self.days_filter  # Add date filter to Tavily search
             )
             
-            # Extract company names from results using GPT
+            # Filter results by date
+            results = response.get('results', [])
+            filtered_results = self._filter_results_by_date(results)
+            
+            # Extract company names from filtered results using GPT
             results_text = "\n".join([
-                f"Title: {r.get('title', '')}\nContent: {r.get('content', '')[:500]}\nURL: {r.get('url', '')}\n"
-                for r in response.get('results', [])
+                f"Title: {r.get('title', '')}\nContent: {r.get('content', '')[:500]}\nURL: {r.get('url', '')}\nDate: {r.get('published_date', 'N/A')}\n"
+                for r in filtered_results
             ])
             
             if results_text:
@@ -66,7 +109,7 @@ class TavilyAgent:
                         companies.add(company)
                         logger.info(f"Found company: {name.strip()}")
             
-            logger.info(f"Found {len(companies)} unique companies")
+            logger.info(f"Found {len(companies)} unique companies (within {self.days_filter} days)")
             return companies
             
         except Exception as e:
@@ -117,13 +160,18 @@ Company names:"""
             response = self.client.search(
                 query=query,
                 max_results=max_results,
-                search_depth="advanced"
+                search_depth="advanced",
+                days=self.days_filter  # Add date filter
             )
+            
+            # Filter results by date
+            results = response.get('results', [])
+            filtered_results = self._filter_results_by_date(results)
             
             # Extract prospect information using GPT
             results_text = "\n".join([
-                f"Title: {r.get('title', '')}\nContent: {r.get('content', '')[:500]}\nURL: {r.get('url', '')}\n"
-                for r in response.get('results', [])
+                f"Title: {r.get('title', '')}\nContent: {r.get('content', '')[:500]}\nURL: {r.get('url', '')}\nDate: {r.get('published_date', 'N/A')}\n"
+                for r in filtered_results
             ])
             
             if results_text:
@@ -143,7 +191,7 @@ Company names:"""
                         prospects.append(prospect)
                         logger.info(f"Found prospect: {prospect.full_name()} at {company.name}")
             
-            logger.info(f"Found {len(prospects)} prospects at {company.name}")
+            logger.info(f"Found {len(prospects)} prospects at {company.name} (within {self.days_filter} days)")
             return prospects
             
         except Exception as e:
@@ -209,8 +257,9 @@ JSON array:"""
         Search specifically for LinkedIn profiles related to the goal
         This is a more direct approach that searches LinkedIn directly
         Returns a list of prospects with LinkedIn URLs and company domains
+        Only returns results from the last N days (configured in __init__)
         """
-        logger.info(f"Searching LinkedIn profiles for: {goal_query}")
+        logger.info(f"Searching LinkedIn profiles for: {goal_query} (within {self.days_filter} days)")
         prospects = []
         
         try:
@@ -219,27 +268,33 @@ JSON array:"""
                 raise ValueError("TAVILY_API_KEY is missing from configuration")
             
             self._rate_limit()
-            # Search specifically for LinkedIn profiles
+            # Search specifically for LinkedIn profiles with date filter
             search_query = f"{goal_query} linkedin profiles"
             logger.debug(f"Making Tavily API request with query: {search_query}")
             response = self.client.search(
                 query=search_query,
                 search_depth="advanced",
                 max_results=max_results,
-                include_domains=["linkedin.com"]
+                include_domains=["linkedin.com"],
+                days=self.days_filter  # Add date filter - only last N days
             )
             
-            # Build raw context from search results
-            raw_context = ""
-            for r in response.get('results', []):
-                raw_context += f"URL: {r.get('url', '')}\nContent: {r.get('content', '')}\n---\n"
+            # Filter results by date
+            results = response.get('results', [])
+            filtered_results = self._filter_results_by_date(results)
             
-            if not raw_context:
-                logger.warning("No LinkedIn results found")
+            if not filtered_results:
+                logger.warning(f"No LinkedIn results found within {self.days_filter} days")
                 return prospects
             
+            # Build raw context from filtered search results
+            raw_context = ""
+            for r in filtered_results:
+                published_date = r.get('published_date', 'N/A')
+                raw_context += f"URL: {r.get('url', '')}\nContent: {r.get('content', '')}\nDate: {published_date}\n---\n"
+            
             # Extract leads using GPT with the user's format
-            logger.info("Extracting names, domains, and LinkedIn URLs...")
+            logger.info(f"Extracting names, domains, and LinkedIn URLs from {len(filtered_results)} recent results...")
             leads = self._extract_leads_from_linkedin_search(goal_query, raw_context)
             
             # Convert leads to Prospect objects
@@ -265,7 +320,7 @@ JSON array:"""
                     prospects.append(prospect)
                     logger.info(f"Found lead: {prospect.full_name()} at {domain}")
             
-            logger.info(f"Found {len(prospects)} prospects from LinkedIn search")
+            logger.info(f"Found {len(prospects)} prospects from LinkedIn search (within {self.days_filter} days)")
             return prospects
             
         except ValueError as e:

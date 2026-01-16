@@ -23,10 +23,12 @@ logger = setup_logger("job_agent")
 class JobSeekerAgent:
     """Main orchestrator for the job seeker agent"""
     
-    def __init__(self, dry_run: bool = False):
+    def __init__(self, dry_run: bool = False, days_filter: int = 45):
         self.dry_run = dry_run
-        self.tavily_agent = TavilyAgent()
-        self.hunter_agent = HunterAgent()
+        self.days_filter = days_filter
+        self.prospect_db = ProspectDatabase()  # Initialize database for caching
+        self.tavily_agent = TavilyAgent(days_filter=days_filter)  # Pass days filter
+        self.hunter_agent = HunterAgent(prospect_db=self.prospect_db)  # Pass database to hunter
         self.email_agent = EmailAgent()
         self.companies: Set[Company] = set()
         self.prospects: List[Prospect] = []
@@ -346,6 +348,13 @@ def main():
         help='Maximum LinkedIn results to process (only used with --linkedin, default: 5)'
     )
     
+    parser.add_argument(
+        '--days',
+        type=int,
+        default=45,
+        help='Filter results to last N days (default: 45 days)'
+    )
+    
     args = parser.parse_args()
     
     # Validate configuration
@@ -356,8 +365,10 @@ def main():
         logger.error("Please check your .env file and ensure all required API keys are set.")
         sys.exit(1)
     
-    # Run the agent
-    agent = JobSeekerAgent(dry_run=args.dry_run)
+    # Run the agent with days filter
+    agent = JobSeekerAgent(dry_run=args.dry_run, days_filter=args.days)
+    logger.info(f"Filtering results to last {args.days} days")
+    
     try:
         if args.linkedin:
             # Use LinkedIn-focused approach
