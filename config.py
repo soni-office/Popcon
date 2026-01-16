@@ -37,10 +37,7 @@ class Config:
             missing.append("HUNTER_API_KEY")
         if not cls.OPENAI_API_KEY:
             missing.append("OPENAI_API_KEY")
-        if not cls.SMTP_USERNAME:
-            missing.append("SMTP_USERNAME")
-        if not cls.SMTP_PASSWORD:
-            missing.append("SMTP_PASSWORD")
+        # SMTP credentials no longer required - using OAuth instead
         
         if missing:
             raise ValueError(f"Missing required environment variables: {', '.join(missing)}")

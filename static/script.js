@@ -18,6 +18,11 @@ const sendEmailsBtn = document.getElementById('sendEmailsBtn');
 const detailModal = document.getElementById('detailModal');
 const closeModal = document.querySelector('.close');
 const themeSelect = document.getElementById('themeSelect');
+const authGmailBtn = document.getElementById('authGmailBtn');
+const authGmailText = document.getElementById('authGmailText');
+const authGmailSpinner = document.getElementById('authGmailSpinner');
+const authStatus = document.getElementById('authStatus');
+const emailInput = document.getElementById('email');
 
 // Status elements
 const totalProspectsEl = document.getElementById('totalProspects');
@@ -50,10 +55,20 @@ initTheme();
 // Event Listeners
 // ============================================
 searchForm.addEventListener('submit', handleSearch);
-sendEmailsBtn.addEventListener('click', handleSendEmails);
-closeModal.addEventListener('click', () => {
-    detailModal.style.display = 'none';
-});
+if (sendEmailsBtn) {
+    sendEmailsBtn.addEventListener('click', handleSendEmails);
+}
+if (closeModal) {
+    closeModal.addEventListener('click', () => {
+        detailModal.style.display = 'none';
+    });
+}
+if (authGmailBtn) {
+    authGmailBtn.addEventListener('click', handleGmailAuth);
+}
+if (emailInput) {
+    emailInput.addEventListener('blur', checkGmailAuth);
+}
 
 window.addEventListener('click', (e) => {
     if (e.target === detailModal) {
@@ -103,6 +118,9 @@ async function handleSearch(e) {
             updateStatus(data.status);
             displayProspects(prospects);
             updateStatusMessage('Prospects found! Click on any prospect to view details.');
+            
+            // Check Gmail auth status after search
+            checkGmailAuth();
             
             if (prospects.length > 0 && prospects.some(p => p && p.email)) {
                 sendEmailsBtn.style.display = 'block';
@@ -357,6 +375,43 @@ async function sendSingleEmail(index, event) {
         return;
     }
     
+    // Check if Gmail is authenticated
+    const userEmail = document.getElementById('email').value.trim();
+    if (!userEmail) {
+        alert('Please enter your email address first');
+        return;
+    }
+    
+    try {
+        const authCheck = await fetch(`${API_BASE}/api/oauth/check`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: userEmail })
+        });
+        const authData = await authCheck.json();
+        
+        if (!authData.success || !authData.authenticated) {
+            if (confirm('Gmail is not authenticated. Would you like to authenticate now?')) {
+                await handleGmailAuth();
+                // Re-check after auth
+                const recheck = await fetch(`${API_BASE}/api/oauth/check`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: userEmail })
+                });
+                const recheckData = await recheck.json();
+                if (!recheckData.success || !recheckData.authenticated) {
+                    alert('Please authenticate Gmail before sending emails');
+                    return;
+                }
+            } else {
+                return;
+            }
+        }
+    } catch (error) {
+        console.error('Auth check error:', error);
+    }
+    
     if (!confirm(`Send email to ${prospect.full_name || 'this prospect'}?`)) {
         return;
     }
@@ -538,3 +593,121 @@ function setLoading(loading) {
         searchBtnSpinner.style.display = 'none';
     }
 }
+
+// ============================================
+// Gmail OAuth Authentication
+// ============================================
+async function checkGmailAuth() {
+    if (!emailInput || !authStatus) return;
+    
+    const email = emailInput.value.trim();
+    if (!email) {
+        if (authStatus) authStatus.style.display = 'none';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/oauth/check`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email: email })
+        });
+        
+        const data = await response.json();
+        if (data.success && data.authenticated) {
+            showAuthStatus('✅ Gmail authenticated', 'success');
+            if (authGmailText) authGmailText.textContent = '✅ Authenticated';
+            if (authGmailBtn) authGmailBtn.disabled = true;
+        } else {
+            showAuthStatus('⚠️ Gmail not authenticated. Click to authenticate.', 'warning');
+            if (authGmailText) authGmailText.textContent = '🔐 Authenticate Gmail';
+            if (authGmailBtn) authGmailBtn.disabled = false;
+        }
+    } catch (error) {
+        console.error('Error checking auth:', error);
+        if (authStatus) showAuthStatus('⚠️ Could not check authentication status', 'warning');
+    }
+}
+
+async function handleGmailAuth() {
+    if (!emailInput) {
+        alert('Email input not found');
+        return;
+    }
+    
+    const email = emailInput.value.trim();
+    if (!email) {
+        alert('Please enter your email address first');
+        emailInput.focus();
+        return;
+    }
+    
+    if (!confirm(`This will open your browser to authenticate Gmail for ${email}.\n\nMake sure you have credentials.json file in the project root.\n\nContinue?`)) {
+        return;
+    }
+    
+    // Show loading
+    if (authGmailText) authGmailText.style.display = 'none';
+    if (authGmailSpinner) authGmailSpinner.style.display = 'inline-block';
+    if (authGmailBtn) authGmailBtn.disabled = true;
+    showAuthStatus('Opening browser for Gmail authentication...', 'info');
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/oauth/authenticate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email: email })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.authenticated) {
+            showAuthStatus('✅ Gmail authenticated successfully!', 'success');
+            if (authGmailText) {
+                authGmailText.textContent = '✅ Authenticated';
+                authGmailText.style.display = 'inline';
+            }
+            if (authGmailBtn) authGmailBtn.disabled = true;
+            alert('Gmail authentication successful! You can now send emails.');
+        } else if (data.credentials_missing || (data.error && data.error.includes('credentials'))) {
+            const errorMsg = data.error || 'OAuth credentials not configured';
+            showAuthStatus('❌ OAuth credentials not configured', 'error');
+            alert(errorMsg + '\n\nPlease:\n1. Download credentials.json from Google Cloud Console\n2. Place it in the project root directory\n3. See OAUTH_SETUP.md for detailed instructions');
+        } else {
+            const errorMsg = data.error || 'Authentication failed';
+            showAuthStatus(`⚠️ ${errorMsg}`, 'error');
+            alert(`Authentication failed: ${errorMsg}`);
+            if (authGmailText) {
+                authGmailText.textContent = '🔐 Authenticate Gmail';
+                authGmailText.style.display = 'inline';
+            }
+            if (authGmailBtn) authGmailBtn.disabled = false;
+        }
+    } catch (error) {
+        console.error('Auth error:', error);
+        showAuthStatus('❌ Error during authentication: ' + error.message, 'error');
+        alert('Failed to authenticate. Error: ' + error.message + '\n\nMake sure the Flask server is running and credentials.json exists.');
+        if (authGmailText) {
+            authGmailText.textContent = '🔐 Authenticate Gmail';
+            authGmailText.style.display = 'inline';
+        }
+        if (authGmailBtn) authGmailBtn.disabled = false;
+    } finally {
+        if (authGmailSpinner) authGmailSpinner.style.display = 'none';
+    }
+}
+
+function showAuthStatus(message, type) {
+    if (!authStatus) return;
+    authStatus.textContent = message;
+    authStatus.className = `auth-status auth-${type}`;
+    authStatus.style.display = 'block';
+}
+
+// Make functions available globally
+window.handleGmailAuth = handleGmailAuth;
+window.checkGmailAuth = checkGmailAuth;

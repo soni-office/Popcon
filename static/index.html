@@ -36,7 +36,14 @@
                 
                 <div class="form-group">
                     <label for="email">Your Email *</label>
-                    <input type="email" id="email" name="email" required placeholder="john@example.com">
+                    <div class="email-input-group">
+                        <input type="email" id="email" name="email" required placeholder="john@example.com">
+                        <button type="button" id="authGmailBtn" class="btn-auth-gmail">
+                            <span id="authGmailText">🔐 Authenticate Gmail</span>
+                            <span id="authGmailSpinner" class="spinner" style="display: none;"></span>
+                        </button>
+                    </div>
+                    <div id="authStatus" class="auth-status" style="display: none;"></div>
                 </div>
                 
                 <div class="form-group">

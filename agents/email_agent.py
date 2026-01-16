@@ -1,31 +1,35 @@
-import smtplib
 import time
 import random
-from email.message import EmailMessage
 from typing import Optional, List
 from openai import OpenAI
 from config import Config
 from models.prospect import Prospect
 from utils.logger import setup_logger
 from utils.validators import validate_email
+from utils.gmail_oauth import GmailOAuthService
 
 logger = setup_logger(__name__)
 
 class EmailAgent:
-    """Agent for generating and sending emails"""
+    """Agent for generating and sending emails using Gmail OAuth2"""
     
-    def __init__(self):
+    def __init__(self, user_email: str = None):
         self.openai_client = OpenAI(api_key=Config.OPENAI_API_KEY)
-        # Use SMTP_SSL on port 465 for Gmail (more reliable)
-        self.smtp_host = Config.SMTP_HOST
-        self.smtp_port = Config.SMTP_PORT
-        self.use_ssl = Config.SMTP_PORT == 465  # Use SSL if port is 465
-        self.smtp_username = Config.SMTP_USERNAME
-        self.smtp_password = Config.SMTP_PASSWORD
-        self.from_email = Config.SMTP_FROM_EMAIL or Config.SMTP_USERNAME
-        self.from_name = Config.SMTP_FROM_NAME
+        self.user_email = user_email
+        self.gmail_oauth = GmailOAuthService()
         self.delay_min = 5  # Minimum delay between emails (seconds)
         self.delay_max = 15  # Maximum delay between emails (seconds)
+        self._gmail_service = None
+    
+    def get_gmail_service(self, user_email: str = None) -> object:
+        """Get or create Gmail service for user"""
+        email = user_email or self.user_email
+        if not email:
+            raise ValueError("User email is required for Gmail OAuth")
+        
+        if not self._gmail_service:
+            self._gmail_service = self.gmail_oauth.get_gmail_service(email)
+        return self._gmail_service
     
     def generate_email(self, prospect: Prospect, template_path: Optional[str] = None, 
                        user_info: Optional[dict] = None) -> str:
@@ -89,9 +93,10 @@ Generate the email body only (no subject line). Start with "Hi {prospect.first_n
             logger.error(f"Error generating email: {str(e)}")
             raise
     
-    def send_email(self, prospect: Prospect, subject: str, body: str, dry_run: bool = False) -> bool:
+    def send_email(self, prospect: Prospect, subject: str, body: str, 
+                  dry_run: bool = False, user_email: str = None) -> bool:
         """
-        Send email via SMTP using EmailMessage (simpler format)
+        Send email via Gmail API using OAuth2
         Returns True if successful, False otherwise
         """
         if not validate_email(prospect.email):
@@ -105,37 +110,27 @@ Generate the email body only (no subject line). Start with "Hi {prospect.first_n
             return True
         
         try:
-            # Create message using EmailMessage (simpler)
-            msg = EmailMessage()
-            msg['Subject'] = subject
-            msg['From'] = self.from_email
-            msg['To'] = prospect.email
-            msg.set_content(body)
+            # Get Gmail service
+            service = self.get_gmail_service(user_email)
             
-            # Send email using SMTP_SSL for port 465 or SMTP with STARTTLS for port 587
-            if self.use_ssl:
-                with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port) as smtp:
-                    smtp.login(self.smtp_username, self.smtp_password)
-                    smtp.send_message(msg)
-            else:
-                with smtplib.SMTP(self.smtp_host, self.smtp_port) as smtp:
-                    smtp.starttls()
-                    smtp.login(self.smtp_username, self.smtp_password)
-                    smtp.send_message(msg)
+            # Send email via Gmail API
+            self.gmail_oauth.send_message(
+                service=service,
+                recipient=prospect.email,
+                subject=subject,
+                body=body
+            )
             
             logger.info(f"✅ Sent to: {prospect.full_name()} ({prospect.email})")
             return True
             
-        except smtplib.SMTPException as e:
-            logger.error(f"SMTP error sending email to {prospect.email}: {str(e)}")
-            return False
         except Exception as e:
-            logger.error(f"Unexpected error sending email: {str(e)}")
+            logger.error(f"Error sending email to {prospect.email}: {str(e)}")
             return False
     
     def generate_and_send(self, prospect: Prospect, template_path: Optional[str] = None, 
                          subject: Optional[str] = None, dry_run: bool = False,
-                         user_info: Optional[dict] = None) -> bool:
+                         user_info: Optional[dict] = None, user_email: str = None) -> bool:
         """
         Generate and send email in one step
         Returns True if successful
@@ -144,12 +139,12 @@ Generate the email body only (no subject line). Start with "Hi {prospect.first_n
             # Generate email body
             body = self.generate_email(prospect, template_path, user_info=user_info)
             
-            # Generate subject if not provided (using your format)
+            # Generate subject if not provided
             if not subject:
                 subject = f"Quick question regarding {prospect.company_name}"
             
             # Send email
-            return self.send_email(prospect, subject, body, dry_run)
+            return self.send_email(prospect, subject, body, dry_run, user_email=user_email)
             
         except Exception as e:
             logger.error(f"Error in generate_and_send: {str(e)}")
@@ -157,7 +152,7 @@ Generate the email body only (no subject line). Start with "Hi {prospect.first_n
     
     def send_bulk_emails(self, prospects: List[Prospect], template_path: Optional[str] = None,
                          subject: Optional[str] = None, dry_run: bool = False,
-                         user_info: Optional[dict] = None) -> dict:
+                         user_info: Optional[dict] = None, user_email: str = None) -> dict:
         """
         Send emails to multiple prospects with human-like delays between sends
         Returns a dictionary with success/failure counts
@@ -171,20 +166,15 @@ Generate the email body only (no subject line). Start with "Hi {prospect.first_n
         if dry_run:
             logger.info(f"[DRY RUN] Would send {len(prospects)} emails")
             for prospect in prospects:
-                self.generate_and_send(prospect, template_path, subject, dry_run=True, user_info=user_info)
+                self.generate_and_send(prospect, template_path, subject, dry_run=True, 
+                                     user_info=user_info, user_email=user_email)
             results['sent'] = len(prospects)
             return results
         
-        # Establish a single connection for efficiency
+        # Get Gmail service once
         try:
-            if self.use_ssl:
-                smtp_connection = smtplib.SMTP_SSL(self.smtp_host, self.smtp_port)
-            else:
-                smtp_connection = smtplib.SMTP(self.smtp_host, self.smtp_port)
-                smtp_connection.starttls()
-            
-            smtp_connection.login(self.smtp_username, self.smtp_password)
-            logger.info("🚀 Connected to SMTP server successfully.")
+            service = self.get_gmail_service(user_email)
+            logger.info("🚀 Connected to Gmail API successfully.")
             
             for idx, prospect in enumerate(prospects, 1):
                 logger.info(f"Processing {idx}/{len(prospects)}: {prospect.full_name()}")
@@ -197,15 +187,14 @@ Generate the email body only (no subject line). Start with "Hi {prospect.first_n
                     else:
                         email_subject = subject
                     
-                    # Create message
-                    msg = EmailMessage()
-                    msg['Subject'] = email_subject
-                    msg['From'] = self.from_email
-                    msg['To'] = prospect.email
-                    msg.set_content(body)
+                    # Send email via Gmail API
+                    self.gmail_oauth.send_message(
+                        service=service,
+                        recipient=prospect.email,
+                        subject=email_subject,
+                        body=body
+                    )
                     
-                    # Send email
-                    smtp_connection.send_message(msg)
                     logger.info(f"✅ Sent to: {prospect.full_name()} ({prospect.email})")
                     results['sent'] += 1
                     
@@ -220,10 +209,8 @@ Generate the email body only (no subject line). Start with "Hi {prospect.first_n
                     results['failed'] += 1
                     continue
             
-            smtp_connection.quit()
-            
         except Exception as e:
-            logger.error(f"❌ Connection error: {str(e)}")
+            logger.error(f"❌ Gmail API error: {str(e)}")
             results['failed'] = len(prospects) - results['sent']
         
         logger.info(f"📊 Bulk send complete: {results['sent']} sent, {results['failed']} failed")

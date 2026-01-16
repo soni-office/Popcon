@@ -17,6 +17,7 @@ from agents.tavily_agent import TavilyAgent
 from agents.hunter_agent import HunterAgent
 from agents.email_agent import EmailAgent
 from utils.logger import setup_logger
+from utils.gmail_oauth import GmailOAuthService
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 CORS(app)  # Enable CORS for frontend
@@ -41,13 +42,16 @@ tavily_agent = None
 hunter_agent = None
 email_agent = None
 
-def init_agents():
+gmail_oauth_service = GmailOAuthService()
+
+def init_agents(user_email: str = None):
     """Initialize agents (lazy loading)"""
     global tavily_agent, hunter_agent, email_agent
     if tavily_agent is None:
         tavily_agent = TavilyAgent()
         hunter_agent = HunterAgent()
-        email_agent = EmailAgent()
+    # Email agent needs to be recreated per user email
+    email_agent = EmailAgent(user_email=user_email)
     return tavily_agent, hunter_agent, email_agent
 
 @app.route('/')
@@ -158,6 +162,104 @@ def get_prospect_details(prospect_id):
         logger.error(f"Error getting prospect details: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/oauth/authenticate', methods=['POST'])
+def authenticate_gmail():
+    """Initiate Gmail OAuth flow"""
+    try:
+        data = request.json
+        user_email = data.get('email', '').strip()
+        
+        if not user_email:
+            return jsonify({
+                'success': False,
+                'error': 'Email is required'
+            }), 400
+        
+        # Check if already authenticated
+        if gmail_oauth_service.is_authenticated(user_email):
+            return jsonify({
+                'success': True,
+                'authenticated': True,
+                'message': 'Already authenticated'
+            })
+        
+        # Check if credentials file exists
+        credentials_file = gmail_oauth_service.credentials_file
+        if not os.path.exists(credentials_file):
+            abs_path = os.path.abspath(credentials_file)
+            return jsonify({
+                'success': False,
+                'error': f'OAuth credentials file not found.\n\n'
+                        f'Expected location: {abs_path}\n\n'
+                        f'Please:\n'
+                        f'1. Download OAuth2 credentials from Google Cloud Console\n'
+                        f'2. Save as "credentials.json" in the project root\n'
+                        f'3. See OAUTH_SETUP.md for detailed instructions',
+                'authenticated': False,
+                'credentials_missing': True
+            }), 400
+        
+        # Try to authenticate - this will open browser
+        try:
+            logger.info(f"Starting OAuth flow for {user_email}")
+            service = gmail_oauth_service.get_gmail_service(user_email, port=0)
+            logger.info(f"OAuth authentication successful for {user_email}")
+            return jsonify({
+                'success': True,
+                'authenticated': True,
+                'message': 'Authentication successful! Browser should have opened for authorization.'
+            })
+        except FileNotFoundError as e:
+            return jsonify({
+                'success': False,
+                'error': str(e),
+                'authenticated': False,
+                'credentials_missing': True
+            }), 400
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"OAuth error: {error_msg}")
+            return jsonify({
+                'success': False,
+                'error': f'Authentication failed: {error_msg}',
+                'authenticated': False
+            }), 500
+        
+    except Exception as e:
+        logger.error(f"Error in OAuth authentication: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': f'Unexpected error: {str(e)}',
+            'authenticated': False
+        }), 500
+
+@app.route('/api/oauth/check', methods=['POST'])
+def check_authentication():
+    """Check if user is authenticated"""
+    try:
+        data = request.json
+        user_email = data.get('email', '').strip()
+        
+        if not user_email:
+            return jsonify({
+                'success': False,
+                'authenticated': False
+            }), 400
+        
+        is_auth = gmail_oauth_service.is_authenticated(user_email)
+        return jsonify({
+            'success': True,
+            'authenticated': is_auth
+        })
+        
+    except Exception as e:
+        logger.error(f"Error checking authentication: {str(e)}")
+        return jsonify({
+            'success': False,
+            'authenticated': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/send-email/<int:prospect_id>', methods=['POST'])
 def send_single_email(prospect_id):
     """Send email to a single prospect"""
@@ -173,11 +275,26 @@ def send_single_email(prospect_id):
                 'error': 'No email address found for this prospect'
             }), 400
         
-        # Initialize email agent
-        _, _, email_agent = init_agents()
-        
-        # Get user info for email personalization
+        # Get user email from session
         user_info = session_data.get('user_info', {})
+        user_email = user_info.get('email', '').strip()
+        
+        if not user_email:
+            return jsonify({
+                'success': False,
+                'error': 'User email is required. Please authenticate first.'
+            }), 400
+        
+        # Check authentication
+        if not gmail_oauth_service.is_authenticated(user_email):
+            return jsonify({
+                'success': False,
+                'error': 'Gmail not authenticated. Please authenticate first.',
+                'needs_auth': True
+            }), 401
+        
+        # Initialize email agent with user email
+        _, _, email_agent = init_agents(user_email=user_email)
         
         # Send email
         success = email_agent.generate_and_send(
@@ -185,7 +302,8 @@ def send_single_email(prospect_id):
             template_path=None,
             subject=None,
             dry_run=False,
-            user_info=user_info
+            user_info=user_info,
+            user_email=user_email
         )
         
         if success:
@@ -229,18 +347,37 @@ def send_emails():
         session_data['status']['current_step'] = 'Sending emails...'
         session_data['status']['emails_sent'] = 0
         
-        # Initialize email agent
-        _, _, email = init_agents()
-        
-        # Get user info for email personalization
+        # Get user email from session
         user_info = session_data.get('user_info', {})
+        user_email = user_info.get('email', '').strip()
+        
+        if not user_email:
+            return jsonify({
+                'success': False,
+                'message': 'User email is required. Please provide your email.',
+                'status': session_data['status']
+            }), 400
+        
+        # Check authentication
+        if not dry_run and not gmail_oauth_service.is_authenticated(user_email):
+            return jsonify({
+                'success': False,
+                'message': 'Gmail not authenticated. Please authenticate first.',
+                'needs_auth': True,
+                'status': session_data['status']
+            }), 401
+        
+        # Initialize email agent with user email
+        _, _, email = init_agents(user_email=user_email)
         
         # Send emails (email generation will use user info from session)
         if dry_run:
-            results = email.send_bulk_emails(prospects_with_emails, dry_run=True, user_info=user_info)
+            results = email.send_bulk_emails(prospects_with_emails, dry_run=True, 
+                                           user_info=user_info, user_email=user_email)
         else:
             # For actual sending, we'll use the bulk method
-            results = email.send_bulk_emails(prospects_with_emails, dry_run=False, user_info=user_info)
+            results = email.send_bulk_emails(prospects_with_emails, dry_run=False, 
+                                           user_info=user_info, user_email=user_email)
         
         session_data['status']['emails_sent'] = results['sent']
         session_data['status']['emails_failed'] = results.get('failed', 0)

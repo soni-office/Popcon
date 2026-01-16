@@ -40,6 +40,11 @@ ENV/
 *.log
 job_agent_*.log
 
+# OAuth tokens
+tokens/
+token_*.json
+credentials.json
+
 # Results
 job_agent_results_*.json
 job_agent_results_*.csv
