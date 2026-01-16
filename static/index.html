@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Job Seeker Agent</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 AI Job Seeker Agent</h1>
+            <p>Find opportunities and connect with hiring managers</p>
+        </header>
+
+        <!-- User Input Form -->
+        <div class="card" id="inputCard">
+            <h2>Your Information</h2>
+            <form id="searchForm">
+                <div class="form-group">
+                    <label for="name">Your Name *</label>
+                    <input type="text" id="name" name="name" required placeholder="John Doe">
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">Your Email *</label>
+                    <input type="email" id="email" name="email" required placeholder="john@example.com">
+                </div>
+                
+                <div class="form-group">
+                    <label for="skills">Your Skills *</label>
+                    <input type="text" id="skills" name="skills" required placeholder="React, JavaScript, Node.js">
+                </div>
+                
+                <div class="form-group">
+                    <label for="goal">Job Search Goal *</label>
+                    <textarea id="goal" name="goal" required rows="3" placeholder="I am looking for React developer opportunities"></textarea>
+                </div>
+                
+                <button type="submit" id="searchBtn" class="btn btn-primary">
+                    <span id="searchBtnText">Search Prospects</span>
+                    <span id="searchBtnSpinner" class="spinner" style="display: none;"></span>
+                </button>
+            </form>
+        </div>
+
+        <!-- Status Card -->
+        <div class="card" id="statusCard" style="display: none;">
+            <h2>Status</h2>
+            <div class="status-grid">
+                <div class="status-item">
+                    <span class="status-label">Total Prospects:</span>
+                    <span class="status-value" id="totalProspects">0</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Emails Found:</span>
+                    <span class="status-value" id="emailsFound">0</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Emails Sent:</span>
+                    <span class="status-value" id="emailsSent">0</span>
+                </div>
+            </div>
+            <div class="status-message" id="statusMessage"></div>
+        </div>
+
+        <!-- Prospects List -->
+        <div class="card" id="prospectsCard" style="display: none;">
+            <div class="card-header">
+                <h2>Found Prospects</h2>
+                <button id="sendEmailsBtn" class="btn btn-success" style="display: none;">
+                    Send Emails to All
+                </button>
+            </div>
+            <div id="prospectsList" class="prospects-list"></div>
+        </div>
+
+        <!-- Prospect Detail Modal -->
+        <div id="detailModal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>Prospect Details</h2>
+                <div id="prospectDetails"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

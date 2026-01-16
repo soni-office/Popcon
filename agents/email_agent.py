@@ -27,7 +27,8 @@ class EmailAgent:
         self.delay_min = 5  # Minimum delay between emails (seconds)
         self.delay_max = 15  # Maximum delay between emails (seconds)
     
-    def generate_email(self, prospect: Prospect, template_path: Optional[str] = None) -> str:
+    def generate_email(self, prospect: Prospect, template_path: Optional[str] = None, 
+                       user_info: Optional[dict] = None) -> str:
         """
         Generate personalized email using GPT
         Returns the email content in a simple, professional format
@@ -44,19 +45,31 @@ class EmailAgent:
                 except FileNotFoundError:
                     logger.warning(f"Template file not found: {template_path}, using default")
             
-            # Create prompt for GPT with simpler format
+            # Get user info for personalization
+            user_name = user_info.get('name', 'Job Seeker') if user_info else 'Job Seeker'
+            user_skills = user_info.get('skills', '') if user_info else ''
+            user_goal = user_info.get('goal', '') if user_info else ''
+            
+            # Create prompt for GPT with user information
+            user_context = ""
+            if user_skills:
+                user_context += f"\n- Mention your skills: {user_skills}"
+            if user_goal:
+                user_context += f"\n- Reference your goal: {user_goal}"
+            
             prompt = f"""Generate a concise, professional email to {prospect.full_name()} at {prospect.company_name}.
 
 The email should:
 - Be brief and friendly (2-3 short paragraphs)
 - Mention that you were researching {prospect.company_name}
-- Express interest in opportunities or collaboration
+- Express interest in opportunities or collaboration{user_context}
 - Request a brief conversation
 - Use a casual but professional tone
+- Be signed by {user_name}
 
 {"Use this template as a guide:" + template if template else ""}
 
-Generate the email body only (no subject line, no signature). Start with "Hi {prospect.first_name},":"""
+Generate the email body only (no subject line). Start with "Hi {prospect.first_name}," and end with "Best,\n{user_name}":"""
             
             response = self.openai_client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -121,14 +134,15 @@ Generate the email body only (no subject line, no signature). Start with "Hi {pr
             return False
     
     def generate_and_send(self, prospect: Prospect, template_path: Optional[str] = None, 
-                         subject: Optional[str] = None, dry_run: bool = False) -> bool:
+                         subject: Optional[str] = None, dry_run: bool = False,
+                         user_info: Optional[dict] = None) -> bool:
         """
         Generate and send email in one step
         Returns True if successful
         """
         try:
             # Generate email body
-            body = self.generate_email(prospect, template_path)
+            body = self.generate_email(prospect, template_path, user_info=user_info)
             
             # Generate subject if not provided (using your format)
             if not subject:
@@ -142,7 +156,8 @@ Generate the email body only (no subject line, no signature). Start with "Hi {pr
             return False
     
     def send_bulk_emails(self, prospects: List[Prospect], template_path: Optional[str] = None,
-                         subject: Optional[str] = None, dry_run: bool = False) -> dict:
+                         subject: Optional[str] = None, dry_run: bool = False,
+                         user_info: Optional[dict] = None) -> dict:
         """
         Send emails to multiple prospects with human-like delays between sends
         Returns a dictionary with success/failure counts
@@ -156,7 +171,7 @@ Generate the email body only (no subject line, no signature). Start with "Hi {pr
         if dry_run:
             logger.info(f"[DRY RUN] Would send {len(prospects)} emails")
             for prospect in prospects:
-                self.generate_and_send(prospect, template_path, subject, dry_run=True)
+                self.generate_and_send(prospect, template_path, subject, dry_run=True, user_info=user_info)
             results['sent'] = len(prospects)
             return results
         
@@ -176,7 +191,7 @@ Generate the email body only (no subject line, no signature). Start with "Hi {pr
                 
                 try:
                     # Generate email
-                    body = self.generate_email(prospect, template_path)
+                    body = self.generate_email(prospect, template_path, user_info=user_info)
                     if not subject:
                         email_subject = f"Quick question regarding {prospect.company_name}"
                     else:
