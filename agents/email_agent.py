@@ -31,6 +31,38 @@ class EmailAgent:
             self._gmail_service = self.gmail_oauth.get_gmail_service(email)
         return self._gmail_service
     
+    def enhance_prompt(self, prompt: str) -> str:
+        """
+        Uses GPT to improve the quality and professionalism of the email-generation prompt.
+        """
+        try:
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are an expert prompt engineer. "
+                            "Rewrite the user's prompt to be clearer, more professional, "
+                            "and more effective for generating high-quality outreach emails. "
+                            "Do not change the intent. "
+                            "Return only the improved prompt."
+                        )
+                    },
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=500
+            )
+
+            improved_prompt = response.choices[0].message.content.strip()
+            return improved_prompt
+
+        except Exception as e:
+            logger.warning(f"Prompt enhancement failed, using original prompt. Error: {e}")
+            return prompt
+
+    # Generate email
     def generate_email(self, prospect: Prospect, template_path: Optional[str] = None, 
                        user_info: Optional[dict] = None) -> str:
         """
@@ -61,7 +93,20 @@ class EmailAgent:
             if user_goal:
                 user_context += f"\n- Reference your goal: {user_goal}"
             
-            prompt = f"""Generate a concise, professional email to {prospect.full_name()} at {prospect.company_name}.
+#             prompt = f"""Generate a concise, professional email to {prospect.full_name()} at {prospect.company_name}.
+#             prompt = self.enhance_prompt(prompt)  
+# The email should:
+# - Be brief and friendly (2-3 short paragraphs)
+# - Mention that you were researching {prospect.company_name}
+# - Express interest in opportunities or collaboration{user_context}
+# - Request a brief conversation
+# - Use a casual but professional tone
+# - Be signed by {user_name}
+
+# {"Use this template as a guide:" + template if template else ""}
+
+# Generate the email body only (no subject line). Start with "Hi {prospect.first_name}," and end with "Best,\n{user_name}":"""
+            base_prompt = f"""Generate a concise, professional email to {prospect.full_name()} at {prospect.company_name}.
 
 The email should:
 - Be brief and friendly (2-3 short paragraphs)
@@ -73,7 +118,12 @@ The email should:
 
 {"Use this template as a guide:" + template if template else ""}
 
-Generate the email body only (no subject line). Start with "Hi {prospect.first_name}," and end with "Best,\n{user_name}":"""
+Generate the email body only (no subject line).
+Start with "Hi {prospect.first_name},"
+and end with "Best,\\n{user_name}".
+"""
+
+            prompt = self.enhance_prompt(base_prompt)
             
             response = self.openai_client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -141,7 +191,7 @@ Generate the email body only (no subject line). Start with "Hi {prospect.first_n
             
             # Generate subject if not provided
             if not subject:
-                subject = f"Quick question regarding {prospect.company_name}"
+                subject = f" {prospect.company_name}"
             
             # Send email
             return self.send_email(prospect, subject, body, dry_run, user_email=user_email)
@@ -174,7 +224,7 @@ Generate the email body only (no subject line). Start with "Hi {prospect.first_n
         # Get Gmail service once
         try:
             service = self.get_gmail_service(user_email)
-            logger.info("🚀 Connected to Gmail API successfully.")
+            logger.info(" Connected to Gmail API successfully.")
             
             for idx, prospect in enumerate(prospects, 1):
                 logger.info(f"Processing {idx}/{len(prospects)}: {prospect.full_name()}")
@@ -183,7 +233,8 @@ Generate the email body only (no subject line). Start with "Hi {prospect.first_n
                     # Generate email
                     body = self.generate_email(prospect, template_path, user_info=user_info)
                     if not subject:
-                        email_subject = f"Quick question regarding {prospect.company_name}"
+                        email_subject = f"Inquiry about openings at {prospect.company_name}"
+
                     else:
                         email_subject = subject
                     
@@ -195,7 +246,7 @@ Generate the email body only (no subject line). Start with "Hi {prospect.first_n
                         body=body
                     )
                     
-                    logger.info(f"✅ Sent to: {prospect.full_name()} ({prospect.email})")
+                    logger.info(f" Sent to: {prospect.full_name()} ({prospect.email})")
                     results['sent'] += 1
                     
                     # Anti-spam: Wait 5 to 15 seconds between emails (except for last one)
@@ -205,13 +256,13 @@ Generate the email body only (no subject line). Start with "Hi {prospect.first_n
                         time.sleep(wait_time)
                     
                 except Exception as e:
-                    logger.error(f"❌ Error sending to {prospect.email}: {str(e)}")
+                    logger.error(f"Error sending to {prospect.email}: {str(e)}")
                     results['failed'] += 1
                     continue
             
         except Exception as e:
-            logger.error(f"❌ Gmail API error: {str(e)}")
+            logger.error(f"Gmail API error: {str(e)}")
             results['failed'] = len(prospects) - results['sent']
         
-        logger.info(f"📊 Bulk send complete: {results['sent']} sent, {results['failed']} failed")
+        logger.info(f" Bulk send complete: {results['sent']} sent, {results['failed']} failed")
         return results
