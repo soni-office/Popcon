@@ -106,26 +106,24 @@ def search_prospects():
         session_data['status']['total_prospects'] = len(unique_prospects)
         session_data['status']['current_step'] = 'Finding email addresses...'
         
-        # Step 2: Find emails
-        prospects_with_emails = []
+        # Step 2: Find emails (but keep all prospects, even without emails)
         for prospect in unique_prospects:
             try:
                 email_addr = hunter.find_email(prospect)
                 if email_addr:
                     prospect.email = email_addr
-                    prospects_with_emails.append(prospect)
                     session_data['status']['emails_found'] += 1
             except Exception as e:
                 logger.warning(f"Error finding email for {prospect.full_name()}: {str(e)}")
-                continue
+                # Continue even if email not found - still include the prospect
         
-        # Update prospects list
-        session_data['prospects'] = prospects_with_emails
+        # Update prospects list (include all prospects, with or without emails)
+        session_data['prospects'] = unique_prospects
         session_data['status']['is_processing'] = False
         session_data['status']['current_step'] = 'Ready to send emails'
         
         # Convert prospects to dict for JSON response
-        prospects_data = [p.to_dict() for p in prospects_with_emails]
+        prospects_data = [p.to_dict() for p in unique_prospects]
         
         return jsonify({
             'success': True,
@@ -159,6 +157,56 @@ def get_prospect_details(prospect_id):
     except Exception as e:
         logger.error(f"Error getting prospect details: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/send-email/<int:prospect_id>', methods=['POST'])
+def send_single_email(prospect_id):
+    """Send email to a single prospect"""
+    try:
+        if prospect_id < 0 or prospect_id >= len(session_data['prospects']):
+            return jsonify({'success': False, 'error': 'Invalid prospect ID'}), 404
+        
+        prospect = session_data['prospects'][prospect_id]
+        
+        if not prospect.email:
+            return jsonify({
+                'success': False,
+                'error': 'No email address found for this prospect'
+            }), 400
+        
+        # Initialize email agent
+        _, _, email_agent = init_agents()
+        
+        # Get user info for email personalization
+        user_info = session_data.get('user_info', {})
+        
+        # Send email
+        success = email_agent.generate_and_send(
+            prospect,
+            template_path=None,
+            subject=None,
+            dry_run=False,
+            user_info=user_info
+        )
+        
+        if success:
+            session_data['status']['emails_sent'] = session_data['status'].get('emails_sent', 0) + 1
+            return jsonify({
+                'success': True,
+                'message': f'Email sent successfully to {prospect.full_name()}',
+                'status': session_data['status']
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to send email'
+            }), 500
+        
+    except Exception as e:
+        logger.error(f"Error sending email to prospect {prospect_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/api/send-emails', methods=['POST'])
 def send_emails():

@@ -9,8 +9,20 @@
 <body>
     <div class="container">
         <header>
-            <h1>🚀 AI Job Seeker Agent</h1>
-            <p>Find opportunities and connect with hiring managers</p>
+            <div class="header-content">
+                <div>
+                    <h1> AI Job Seeker Agent</h1>
+                    <p>Find opportunities and connect with hiring managers</p>
+                </div>
+                <div class="theme-toggle-container">
+                    <label for="themeSelect" class="theme-label">Theme:</label>
+                    <select id="themeSelect" class="theme-select">
+                        <option value="dark">Dark</option>
+                        <option value="light">Light</option>
+                        <option value="gradient">Gradient</option>
+                    </select>
+                </div>
+            </div>
         </header>
 
         <!-- User Input Form -->
@@ -67,12 +79,14 @@
         <!-- Prospects List -->
         <div class="card" id="prospectsCard" style="display: none;">
             <div class="card-header">
-                <h2>Found Prospects</h2>
+                <h2>
+                    <span id="prospectsCount">0</span> Prospects Found
+                </h2>
                 <button id="sendEmailsBtn" class="btn btn-success" style="display: none;">
                     Send Emails to All
                 </button>
             </div>
-            <div id="prospectsList" class="prospects-list"></div>
+            <div id="prospectsList" class="prospects-accordion"></div>
         </div>
 
         <!-- Prospect Detail Modal -->

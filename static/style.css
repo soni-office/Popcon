@@ -1,3 +1,75 @@
+/* ============================================
+   CSS Variables for Theme System
+   ============================================ */
+:root {
+    /* Default: Dark Theme */
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-card: #0f3460;
+    --bg-hover: #1e2749;
+    --text-primary: #e4e4e4;
+    --text-secondary: #b8b8b8;
+    --text-muted: #8a8a8a;
+    --accent-primary: #667eea;
+    --accent-secondary: #764ba2;
+    --accent-hover: #7c8bf5;
+    --border-color: #2a3a5a;
+    --shadow: rgba(0, 0, 0, 0.3);
+    --shadow-lg: rgba(0, 0, 0, 0.5);
+    --success: #10b981;
+    --success-hover: #059669;
+    --input-bg: #1e2749;
+    --input-border: #2a3a5a;
+    --input-focus: #667eea;
+}
+
+/* Light Theme */
+body[data-theme="light"] {
+    --bg-primary: #f5f7fa;
+    --bg-secondary: #ffffff;
+    --bg-card: #ffffff;
+    --bg-hover: #f0f4f8;
+    --text-primary: #1a202c;
+    --text-secondary: #4a5568;
+    --text-muted: #718096;
+    --accent-primary: #667eea;
+    --accent-secondary: #764ba2;
+    --accent-hover: #7c8bf5;
+    --border-color: #e2e8f0;
+    --shadow: rgba(0, 0, 0, 0.1);
+    --shadow-lg: rgba(0, 0, 0, 0.15);
+    --success: #10b981;
+    --success-hover: #059669;
+    --input-bg: #ffffff;
+    --input-border: #e2e8f0;
+    --input-focus: #667eea;
+}
+
+/* Gradient Theme */
+body[data-theme="gradient"] {
+    --bg-primary: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    --bg-secondary: rgba(255, 255, 255, 0.95);
+    --bg-card: rgba(255, 255, 255, 0.98);
+    --bg-hover: rgba(255, 255, 255, 0.9);
+    --text-primary: #1a202c;
+    --text-secondary: #4a5568;
+    --text-muted: #718096;
+    --accent-primary: #667eea;
+    --accent-secondary: #764ba2;
+    --accent-hover: #7c8bf5;
+    --border-color: rgba(102, 126, 234, 0.2);
+    --shadow: rgba(102, 126, 234, 0.2);
+    --shadow-lg: rgba(102, 126, 234, 0.3);
+    --success: #10b981;
+    --success-hover: #059669;
+    --input-bg: rgba(255, 255, 255, 0.9);
+    --input-border: rgba(102, 126, 234, 0.3);
+    --input-focus: #667eea;
+}
+
+/* ============================================
+   Base Styles
+   ============================================ */
 * {
     margin: 0;
     padding: 0;
@@ -6,10 +78,22 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     min-height: 100vh;
     padding: 20px;
-    color: #333;
+    color: var(--text-primary);
+    transition: background 0.3s ease, color 0.3s ease;
+}
+
+body[data-theme="dark"] {
+    background: var(--bg-primary);
+}
+
+body[data-theme="light"] {
+    background: var(--bg-primary);
+}
+
+body[data-theme="gradient"] {
+    background: var(--bg-primary);
 }
 
 .container {
@@ -17,29 +101,98 @@ body {
     margin: 0 auto;
 }
 
+/* ============================================
+   Header & Theme Toggle
+   ============================================ */
 header {
     text-align: center;
-    color: white;
     margin-bottom: 30px;
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
 }
 
 header h1 {
     font-size: 2.5em;
     margin-bottom: 10px;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    text-shadow: 2px 2px 4px var(--shadow);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.rocket-icon {
+    font-size: 1.2em;
+    animation: rocketFloat 3s ease-in-out infinite;
+    display: inline-block;
+}
+
+@keyframes rocketFloat {
+    0%, 100% {
+        transform: translateY(0) rotate(0deg);
+    }
+    50% {
+        transform: translateY(-10px) rotate(5deg);
+    }
 }
 
 header p {
     font-size: 1.2em;
     opacity: 0.9;
+    color: var(--text-secondary);
 }
 
+.theme-toggle-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.theme-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.9em;
+}
+
+.theme-select {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 2px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.theme-select:hover {
+    border-color: var(--accent-primary);
+}
+
+.theme-select:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* ============================================
+   Cards
+   ============================================ */
 .card {
-    background: white;
+    background: var(--bg-card);
     border-radius: 12px;
     padding: 30px;
     margin-bottom: 20px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    box-shadow: 0 10px 30px var(--shadow);
+    border: 1px solid var(--border-color);
+    transition: all 0.3s;
 }
 
 .card-header {
@@ -47,19 +200,25 @@ header p {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 15px;
 }
 
 .card-header h2 {
     margin: 0;
-    color: #667eea;
+    color: var(--accent-primary);
+    font-size: 1.8em;
 }
 
 h2 {
-    color: #667eea;
+    color: var(--accent-primary);
     margin-bottom: 20px;
     font-size: 1.8em;
 }
 
+/* ============================================
+   Forms
+   ============================================ */
 .form-group {
     margin-bottom: 20px;
 }
@@ -68,7 +227,7 @@ label {
     display: block;
     margin-bottom: 8px;
     font-weight: 600;
-    color: #555;
+    color: var(--text-secondary);
 }
 
 input[type="text"],
@@ -76,17 +235,20 @@ input[type="email"],
 textarea {
     width: 100%;
     padding: 12px;
-    border: 2px solid #e0e0e0;
+    border: 2px solid var(--input-border);
     border-radius: 8px;
     font-size: 16px;
-    transition: border-color 0.3s;
+    background: var(--input-bg);
+    color: var(--text-primary);
+    transition: all 0.3s;
 }
 
 input[type="text"]:focus,
 input[type="email"]:focus,
 textarea:focus {
     outline: none;
-    border-color: #667eea;
+    border-color: var(--input-focus);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 textarea {
@@ -94,6 +256,9 @@ textarea {
     font-family: inherit;
 }
 
+/* ============================================
+   Buttons
+   ============================================ */
 .btn {
     padding: 12px 24px;
     border: none;
@@ -108,15 +273,15 @@ textarea {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
     color: white;
     width: 100%;
     justify-content: center;
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 5px 15px var(--shadow);
 }
 
 .btn-primary:disabled {
@@ -126,13 +291,14 @@ textarea {
 }
 
 .btn-success {
-    background: #10b981;
+    background: var(--success);
     color: white;
 }
 
 .btn-success:hover {
-    background: #059669;
+    background: var(--success-hover);
     transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(16, 185, 129, 0.3);
 }
 
 .spinner {
@@ -149,6 +315,9 @@ textarea {
     100% { transform: rotate(360deg); }
 }
 
+/* ============================================
+   Status
+   ============================================ */
 .status-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -157,16 +326,17 @@ textarea {
 }
 
 .status-item {
-    background: #f8f9fa;
+    background: var(--bg-hover);
     padding: 15px;
     border-radius: 8px;
     text-align: center;
+    border: 1px solid var(--border-color);
 }
 
 .status-label {
     display: block;
     font-size: 0.9em;
-    color: #666;
+    color: var(--text-muted);
     margin-bottom: 5px;
 }
 
@@ -174,68 +344,209 @@ textarea {
     display: block;
     font-size: 2em;
     font-weight: bold;
-    color: #667eea;
+    color: var(--accent-primary);
 }
 
 .status-message {
     padding: 15px;
-    background: #e3f2fd;
-    border-left: 4px solid #2196f3;
+    background: rgba(102, 126, 234, 0.1);
+    border-left: 4px solid var(--accent-primary);
     border-radius: 4px;
-    color: #1976d2;
+    color: var(--accent-primary);
     font-weight: 500;
 }
 
-.prospects-list {
-    display: grid;
-    gap: 15px;
+/* ============================================
+   Accordion Styles
+   ============================================ */
+.prospects-accordion {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
-.prospect-item {
-    background: #f8f9fa;
-    padding: 20px;
-    border-radius: 8px;
-    border: 2px solid #e0e0e0;
+.accordion-item {
+    background: var(--bg-hover);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.accordion-item:hover {
+    border-color: var(--accent-primary);
+    box-shadow: 0 4px 12px var(--shadow);
+}
+
+.accordion-header {
+    padding: 18px 20px;
     cursor: pointer;
-    transition: all 0.3s;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    user-select: none;
+    transition: background 0.2s, transform 0.1s;
 }
 
-.prospect-item:hover {
-    border-color: #667eea;
-    transform: translateX(5px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+.accordion-header:hover {
+    background: var(--bg-card);
+    transform: translateX(2px);
 }
 
-.prospect-name {
+.accordion-header:active {
+    transform: translateX(0);
+}
+
+.accordion-header-content {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex: 1;
+}
+
+.accordion-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.accordion-title {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.accordion-chevron {
+    color: var(--accent-primary);
     font-size: 1.2em;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+
+.accordion-item.active .accordion-chevron {
+    transform: rotate(180deg);
+}
+
+.accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s;
+    padding: 0 20px;
+}
+
+.accordion-item.active .accordion-content {
+    max-height: 500px;
+    padding: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.accordion-details {
+    display: grid;
+    gap: 16px;
+}
+
+.detail-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.detail-row:last-child {
+    border-bottom: none;
+}
+
+.detail-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    margin-top: 2px;
+    color: var(--accent-primary);
+}
+
+.detail-content {
+    flex: 1;
+}
+
+.detail-label {
+    font-size: 0.85em;
     font-weight: 600;
-    color: #333;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
 }
 
-.prospect-company {
-    color: #666;
-    margin-top: 5px;
+.detail-value {
+    font-size: 1em;
+    color: var(--text-primary);
+    word-break: break-word;
 }
 
-.prospect-email {
-    color: #667eea;
-    font-size: 0.9em;
-}
-
-.view-details {
-    color: #667eea;
-    font-weight: 600;
+.detail-value a {
+    color: var(--accent-primary);
     text-decoration: none;
+    transition: color 0.2s;
 }
 
-.view-details:hover {
+.detail-value a:hover {
+    color: var(--accent-hover);
     text-decoration: underline;
 }
 
-/* Modal Styles */
+.detail-value.empty {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* ============================================
+   Send Email Button
+   ============================================ */
+.btn-send-email {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    width: 100%;
+    justify-content: center;
+}
+
+.btn-send-email:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-send-email:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-send-spinner {
+    animation: spin 1s linear infinite;
+}
+
+/* ============================================
+   Modal
+   ============================================ */
 .modal {
     display: none;
     position: fixed;
@@ -244,8 +555,9 @@ textarea {
     top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0,0,0,0.5);
+    background-color: rgba(0, 0, 0, 0.6);
     animation: fadeIn 0.3s;
+    backdrop-filter: blur(4px);
 }
 
 @keyframes fadeIn {
@@ -254,7 +566,7 @@ textarea {
 }
 
 .modal-content {
-    background-color: white;
+    background: var(--bg-card);
     margin: 5% auto;
     padding: 30px;
     border-radius: 12px;
@@ -264,6 +576,8 @@ textarea {
     overflow-y: auto;
     position: relative;
     animation: slideDown 0.3s;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 20px 60px var(--shadow-lg);
 }
 
 @keyframes slideDown {
@@ -283,49 +597,62 @@ textarea {
     top: 20px;
     font-size: 28px;
     font-weight: bold;
-    color: #aaa;
+    color: var(--text-muted);
     cursor: pointer;
+    transition: color 0.2s;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
 }
 
 .close:hover {
-    color: #000;
+    color: var(--text-primary);
+    background: var(--bg-hover);
 }
 
 .detail-item {
     margin-bottom: 20px;
     padding-bottom: 15px;
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .detail-item:last-child {
     border-bottom: none;
 }
 
-.detail-label {
+.detail-item .detail-label {
     font-weight: 600;
-    color: #667eea;
+    color: var(--accent-primary);
     margin-bottom: 5px;
     display: block;
+    text-transform: none;
+    letter-spacing: normal;
 }
 
-.detail-value {
-    color: #333;
+.detail-item .detail-value {
+    color: var(--text-primary);
     font-size: 1.1em;
 }
 
-.detail-value a {
-    color: #667eea;
+.detail-item .detail-value a {
+    color: var(--accent-primary);
     text-decoration: none;
 }
 
-.detail-value a:hover {
+.detail-item .detail-value a:hover {
     text-decoration: underline;
 }
 
+/* ============================================
+   Empty State
+   ============================================ */
 .empty-state {
     text-align: center;
     padding: 40px;
-    color: #666;
+    color: var(--text-muted);
 }
 
 .empty-state-icon {
@@ -333,11 +660,13 @@ textarea {
     margin-bottom: 20px;
 }
 
+/* ============================================
+   Responsive
+   ============================================ */
 @media (max-width: 768px) {
     .card-header {
         flex-direction: column;
         align-items: flex-start;
-        gap: 15px;
     }
     
     .status-grid {
@@ -346,5 +675,18 @@ textarea {
     
     header h1 {
         font-size: 2em;
+    }
+    
+    .header-content {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .accordion-header {
+        padding: 15px;
+    }
+    
+    .accordion-content {
+        padding: 15px !important;
     }
 }

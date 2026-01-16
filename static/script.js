@@ -13,9 +13,11 @@ const searchBtnSpinner = document.getElementById('searchBtnSpinner');
 const statusCard = document.getElementById('statusCard');
 const prospectsCard = document.getElementById('prospectsCard');
 const prospectsList = document.getElementById('prospectsList');
+const prospectsCount = document.getElementById('prospectsCount');
 const sendEmailsBtn = document.getElementById('sendEmailsBtn');
 const detailModal = document.getElementById('detailModal');
 const closeModal = document.querySelector('.close');
+const themeSelect = document.getElementById('themeSelect');
 
 // Status elements
 const totalProspectsEl = document.getElementById('totalProspects');
@@ -23,7 +25,30 @@ const emailsFoundEl = document.getElementById('emailsFound');
 const emailsSentEl = document.getElementById('emailsSent');
 const statusMessageEl = document.getElementById('statusMessage');
 
+// ============================================
+// Theme Management
+// ============================================
+function initTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    themeSelect.value = savedTheme;
+    applyTheme(savedTheme);
+}
+
+function applyTheme(theme) {
+    document.body.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+}
+
+themeSelect.addEventListener('change', (e) => {
+    applyTheme(e.target.value);
+});
+
+// Initialize theme on load
+initTheme();
+
+// ============================================
 // Event Listeners
+// ============================================
 searchForm.addEventListener('submit', handleSearch);
 sendEmailsBtn.addEventListener('click', handleSendEmails);
 closeModal.addEventListener('click', () => {
@@ -36,7 +61,9 @@ window.addEventListener('click', (e) => {
     }
 });
 
-// Handle search form submission
+// ============================================
+// Search Handler
+// ============================================
 async function handleSearch(e) {
     e.preventDefault();
     
@@ -71,12 +98,13 @@ async function handleSearch(e) {
         const data = await response.json();
         
         if (data.success) {
-            prospects = data.prospects;
+            prospects = data.prospects || [];
+            console.log('Received prospects:', prospects); // Debug log
             updateStatus(data.status);
             displayProspects(prospects);
             updateStatusMessage('Prospects found! Click on any prospect to view details.');
             
-            if (prospects.length > 0 && prospects.some(p => p.email)) {
+            if (prospects.length > 0 && prospects.some(p => p && p.email)) {
                 sendEmailsBtn.style.display = 'block';
             }
         } else {
@@ -92,7 +120,9 @@ async function handleSearch(e) {
     }
 }
 
-// Handle send emails
+// ============================================
+// Send Emails Handler
+// ============================================
 async function handleSendEmails() {
     if (!confirm(`Are you sure you want to send emails to ${prospects.filter(p => p.email).length} prospects?`)) {
         return;
@@ -131,11 +161,25 @@ async function handleSendEmails() {
     }
 }
 
-// Display prospects list
-function displayProspects(prospectsList) {
-    prospectsCard.style.display = 'block';
+// ============================================
+// Display Prospects (Accordion)
+// ============================================
+function displayProspects(prospectsData) {
+    if (!prospectsData || !Array.isArray(prospectsData)) {
+        console.error('Invalid prospects data:', prospectsData);
+        prospectsList.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">⚠️</div>
+                <p>Invalid data received. Please try again.</p>
+            </div>
+        `;
+        return;
+    }
     
-    if (prospectsList.length === 0) {
+    prospectsCard.style.display = 'block';
+    prospectsCount.textContent = prospectsData.length;
+    
+    if (prospectsData.length === 0) {
         prospectsList.innerHTML = `
             <div class="empty-state">
                 <div class="empty-state-icon">🔍</div>
@@ -145,19 +189,256 @@ function displayProspects(prospectsList) {
         return;
     }
     
-    prospectsList.innerHTML = prospectsList.map((prospect, index) => `
-        <div class="prospect-item" onclick="showProspectDetails(${index})">
-            <div>
-                <div class="prospect-name">${prospect.full_name || `${prospect.first_name} ${prospect.last_name}`}</div>
-                <div class="prospect-company">${prospect.company_name || 'Unknown Company'}</div>
-                ${prospect.email ? `<div class="prospect-email">📧 ${prospect.email}</div>` : ''}
+    const accordionHTML = prospectsData.map((prospect, index) => {
+        // Handle name extraction more robustly
+        let fullName = 'Unknown';
+        if (prospect.full_name) {
+            fullName = prospect.full_name.trim();
+        } else if (prospect.first_name || prospect.last_name) {
+            fullName = `${prospect.first_name || ''} ${prospect.last_name || ''}`.trim();
+        }
+        
+        if (!fullName || fullName === 'Unknown') {
+            // Try to get name from email or other fields
+            if (prospect.email) {
+                fullName = prospect.email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            } else {
+                fullName = `Prospect ${index + 1}`;
+            }
+        }
+        
+        const initials = getInitials(fullName);
+        const companyName = (prospect.company_name && prospect.company_name.trim()) || 'Not specified';
+        const email = (prospect.email && prospect.email.trim()) || null;
+        const linkedin = (prospect.linkedin_profile && prospect.linkedin_profile.trim()) || null;
+        const companyDomain = (prospect.company_domain && prospect.company_domain.trim()) || null;
+        
+        return `
+            <div class="accordion-item" data-index="${index}">
+                <div class="accordion-header" data-accordion-index="${index}">
+                    <div class="accordion-header-content">
+                        <div class="accordion-icon">${initials}</div>
+                        <div class="accordion-title">${fullName}</div>
+                    </div>
+                    <div class="accordion-chevron">▼</div>
+                </div>
+                <div class="accordion-content">
+                    <div class="accordion-details">
+                        <div class="detail-row">
+                            <div class="detail-icon">👤</div>
+                            <div class="detail-content">
+                                <div class="detail-label">Person Name</div>
+                                <div class="detail-value">${fullName}</div>
+                            </div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-icon">🏢</div>
+                            <div class="detail-content">
+                                <div class="detail-label">Company Name</div>
+                                <div class="detail-value">${companyName}</div>
+                            </div>
+                        </div>
+                        ${email ? `
+                        <div class="detail-row">
+                            <div class="detail-icon">📧</div>
+                            <div class="detail-content">
+                                <div class="detail-label">Work Email</div>
+                                <div class="detail-value">
+                                    <a href="mailto:${email}">${email}</a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-icon"></div>
+                            <div class="detail-content">
+                                <button class="btn-send-email" data-prospect-index="${index}" onclick="sendSingleEmail(${index}, event)">
+                                    <span class="btn-send-text">📨 Send Email</span>
+                                    <span class="btn-send-spinner" style="display: none;">⏳</span>
+                                </button>
+                            </div>
+                        </div>
+                        ` : `
+                        <div class="detail-row">
+                            <div class="detail-icon">📧</div>
+                            <div class="detail-content">
+                                <div class="detail-label">Work Email</div>
+                                <div class="detail-value empty">Not available</div>
+                            </div>
+                        </div>
+                        `}
+                        ${linkedin ? `
+                        <div class="detail-row">
+                            <div class="detail-icon">💼</div>
+                            <div class="detail-content">
+                                <div class="detail-label">LinkedIn Profile</div>
+                                <div class="detail-value">
+                                    <a href="${linkedin}" target="_blank" rel="noopener noreferrer">${linkedin}</a>
+                                </div>
+                            </div>
+                        </div>
+                        ` : `
+                        <div class="detail-row">
+                            <div class="detail-icon">💼</div>
+                            <div class="detail-content">
+                                <div class="detail-label">LinkedIn Profile</div>
+                                <div class="detail-value empty">Not available</div>
+                            </div>
+                        </div>
+                        `}
+                        ${companyDomain ? `
+                        <div class="detail-row">
+                            <div class="detail-icon">🌐</div>
+                            <div class="detail-content">
+                                <div class="detail-label">Company Domain</div>
+                                <div class="detail-value">${companyDomain}</div>
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
             </div>
-            <div class="view-details">View Details →</div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
+    
+    prospectsList.innerHTML = accordionHTML;
+    
+    // Add event listeners to accordion headers
+    document.querySelectorAll('.accordion-header').forEach(header => {
+        header.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const index = parseInt(this.getAttribute('data-accordion-index'));
+            toggleAccordion(index);
+        });
+    });
 }
 
-// Show prospect details in modal
+// ============================================
+// Accordion Toggle
+// ============================================
+function toggleAccordion(index) {
+    console.log('Toggling accordion for index:', index); // Debug log
+    const item = document.querySelector(`.accordion-item[data-index="${index}"]`);
+    if (!item) {
+        console.error('Accordion item not found for index:', index);
+        return;
+    }
+    
+    const isActive = item.classList.contains('active');
+    
+    // Close all other accordions (optional - remove if you want multiple open)
+    document.querySelectorAll('.accordion-item').forEach(otherItem => {
+        if (otherItem !== item) {
+            otherItem.classList.remove('active');
+        }
+    });
+    
+    // Toggle current item
+    if (isActive) {
+        item.classList.remove('active');
+    } else {
+        item.classList.add('active');
+    }
+}
+
+// Make toggleAccordion available globally
+window.toggleAccordion = toggleAccordion;
+
+// ============================================
+// Send Single Email
+// ============================================
+async function sendSingleEmail(index, event) {
+    if (event) {
+        event.stopPropagation();
+    }
+    
+    const prospect = prospects[index];
+    if (!prospect || !prospect.email) {
+        alert('No email address available for this prospect');
+        return;
+    }
+    
+    if (!confirm(`Send email to ${prospect.full_name || 'this prospect'}?`)) {
+        return;
+    }
+    
+    const btn = document.querySelector(`.btn-send-email[data-prospect-index="${index}"]`);
+    const btnText = btn.querySelector('.btn-send-text');
+    const btnSpinner = btn.querySelector('.btn-send-spinner');
+    
+    // Show loading state
+    btn.disabled = true;
+    btnText.style.display = 'none';
+    btnSpinner.style.display = 'inline';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/send-email/${index}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Update button to show success
+            btnText.textContent = '✅ Sent';
+            btnText.style.display = 'inline';
+            btnSpinner.style.display = 'none';
+            btn.style.background = 'var(--success)';
+            btn.disabled = true;
+            
+            // Update global status
+            if (data.status) {
+                updateStatus(data.status);
+            }
+            
+            // Show success message
+            setTimeout(() => {
+                alert(`Email sent successfully to ${prospect.full_name || prospect.email}!`);
+            }, 100);
+        } else {
+            btnText.textContent = '❌ Failed';
+            btnText.style.display = 'inline';
+            btnSpinner.style.display = 'none';
+            btn.style.background = '#ef4444';
+            alert(data.error || 'Failed to send email');
+        }
+    } catch (error) {
+        console.error('Send email error:', error);
+        btnText.textContent = '❌ Error';
+        btnText.style.display = 'inline';
+        btnSpinner.style.display = 'none';
+        btn.style.background = '#ef4444';
+        alert('Failed to send email. Please try again.');
+    } finally {
+        // Re-enable after a delay if failed
+        if (!btn.disabled || btn.style.background === '#ef4444') {
+            setTimeout(() => {
+                btn.disabled = false;
+                btnText.textContent = '📨 Send Email';
+                btn.style.background = '';
+            }, 3000);
+        }
+    }
+}
+
+// Make sendSingleEmail available globally
+window.sendSingleEmail = sendSingleEmail;
+
+// ============================================
+// Helper Functions
+// ============================================
+function getInitials(name) {
+    if (!name) return '?';
+    const parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+}
+
+// Show prospect details in modal (kept for backward compatibility)
 async function showProspectDetails(index) {
     currentProspectId = index;
     const prospect = prospects[index];
@@ -179,7 +460,7 @@ async function showProspectDetails(index) {
     detailModal.style.display = 'block';
 }
 
-// Display prospect details
+// Display prospect details (for modal - kept for compatibility)
 function displayProspectDetails(prospect) {
     const detailsEl = document.getElementById('prospectDetails');
     
@@ -230,7 +511,9 @@ function displayProspectDetails(prospect) {
     `;
 }
 
-// Update status display
+// ============================================
+// Status Updates
+// ============================================
 function updateStatus(status) {
     totalProspectsEl.textContent = status.total_prospects || 0;
     emailsFoundEl.textContent = status.emails_found || 0;
@@ -241,12 +524,10 @@ function updateStatus(status) {
     }
 }
 
-// Update status message
 function updateStatusMessage(message) {
     statusMessageEl.textContent = message;
 }
 
-// Set loading state
 function setLoading(loading) {
     searchBtn.disabled = loading;
     if (loading) {
@@ -257,21 +538,3 @@ function setLoading(loading) {
         searchBtnSpinner.style.display = 'none';
     }
 }
-
-// Poll for status updates (optional, for real-time updates)
-function startStatusPolling() {
-    setInterval(async () => {
-        try {
-            const response = await fetch(`${API_BASE}/api/status`);
-            const data = await response.json();
-            if (data.success) {
-                updateStatus(data.status);
-            }
-        } catch (error) {
-            console.error('Status polling error:', error);
-        }
-    }, 2000); // Poll every 2 seconds
-}
-
-// Start status polling when page loads
-// startStatusPolling();
